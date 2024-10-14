@@ -7,14 +7,10 @@ import {
   resolveScriptHash,
   mConStr0,
   mConStr1,
-  Mint,
   serializePlutusScript,
   stringToHex,
-  
   UTxO,
-  Transaction
 } from "@meshsdk/core";
-import type { Data,Action } from '@meshsdk/core';
 import { applyParamsToScript , applyCborEncoding} from "@meshsdk/core-csl";
 import { Address,Credential,AddressType } from "@meshsdk/core-cst"
 
@@ -27,7 +23,7 @@ export type AffirmationDatum = ConStr0<
 
 export const MeshAffirmationBlueprint = blueprint;
 type scriptInfo ={ 
-  code?: string, version?: string, address: string, policyId?: string, scriptCbor?: string
+  address: string, policyId?: string, scriptCbor?: string
 }
 export class MeshAffirmationContract extends MeshTxInitiator {
   
@@ -41,29 +37,24 @@ export class MeshAffirmationContract extends MeshTxInitiator {
   getScript = (type: 'Mint' | 'Spend', beneficiaryKeyHash: string ) => {
     const scriptCbor:string=applyCborEncoding(blueprint?.validators[type=='Mint'?0:1]?.compiledCode || '');
     const policyId:string = resolveScriptHash(scriptCbor, "V3");
-    let script:scriptInfo = serializePlutusScript(
+    const script:scriptInfo = serializePlutusScript(
       { code: scriptCbor, version: "V3" },
       beneficiaryKeyHash,
       this.networkId,
     );
     script.policyId = policyId;
-    script.code = scriptCbor;
-    script.version = "V3";
+    script.scriptCbor = scriptCbor;
     return script;
   };
   affirm = async (beneficiary: Credential): Promise<string> => {
-    console.log('Started affirm');
-    if (!this.wallet) return '';
     const { utxos, walletAddress, collateral } = await this.getWalletInfoForTx();
-    const rewardAddress = (await this.wallet.getRewardAddresses())[0];
-    if (!rewardAddress) return '';
+    
     const stakeAddrBech = walletAddress || "";
     const stakeAddr = Address.fromBech32(stakeAddrBech);
     const stakeAddrProps = stakeAddr.getProps();
     const stakeHash = stakeAddrProps.delegationPart?.hash || "";
     const walletHash = stakeAddrProps.paymentPart?.hash || "";
     const mintingScript = this.getScript("Mint", stakeHash);
-    if (!mintingScript.scriptCbor) return '';
     const spendingScript = this.getScript("Spend", stakeHash);
     const targetAddress = mintingScript.address;
     
@@ -71,34 +62,18 @@ export class MeshAffirmationContract extends MeshTxInitiator {
     
     
     
-    const redeemer = {
-      data: { alternative: 0, fields: [] },
-    };
-    const myDatum:Data = { alternative: 0, fields: [stakeHash] };
-    
-    
-    
-    
 
-    const asset: Mint = {
-      assetName: stakeHash,
-      assetQuantity: '1',
-      metadata: {},
-      label: '721',
-      recipient: {address: targetAddress, datum:{inline: true, value: myDatum}}
-    };
+
+    
+    
+    
+    
+    
+    
     
     const assets:Asset[] = [];
     
     assets.push({unit: mintingScript.policyId+stakeHash, quantity:'1'})
-    console.log(mintingScript.scriptCbor);
-    console.log('Beginning transaction');
-    const tx = new Transaction({ initiator: this.wallet }).mintAsset(mintingScript.scriptCbor,asset,redeemer).setRequiredSigners([rewardAddress,walletAddress])
-    console.log(tx);
-    const result = await tx.build();
-    console.log(result);
-    
-    /*
     console.log(mintingScript.policyId);
     console.log(stakeHash);
     await this.mesh
@@ -121,7 +96,6 @@ export class MeshAffirmationContract extends MeshTxInitiator {
     .requiredSignerHash(stakeHash)
     .requiredSignerHash(walletHash)
     .complete();
-    ///*/
     return this.mesh.txHex;
     //const spendingScript:string = applyCborEncoding(blueprint?.validators[1]?.compiledCode || '');
     //const targetAddress = new Address({type:AddressType.BasePaymentScriptStakeKey,networkId: this.networkId, paymentPart: Credential})
